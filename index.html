@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0F2A26">
+<title>Langkawi Geopark — Banner Hidup AR</title>
+
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    overflow:hidden; background:#000;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+    user-select:none; -webkit-user-select:none;
+  }
+
+  /* ===== FIX ISU 2: video kamera MindAR disisip sebagai anak <body>,
+     bukan dalam <a-scene>. Sasarkan SEMUA video KECUALI aset video kita. ===== */
+  video:not(#video-geopark){
+    position:fixed !important;
+    top:50% !important; left:50% !important;
+    transform:translate(-50%,-50%) !important;
+    min-width:100% !important; min-height:100% !important;
+    width:auto !important; height:auto !important;
+    object-fit:cover !important;
+    z-index:0 !important;
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+  }
+  /* aset video jangan dipaparkan sebagai elemen HTML */
+  #video-geopark{display:none !important;}
+
+  a-scene{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100vw !important; height:100vh !important;
+    z-index:1; background:transparent !important;
+  }
+  canvas.a-canvas{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100vw !important; height:100vh !important;
+    z-index:2 !important; background:transparent !important;
+  }
+  .mindar-ui-overlay{display:none !important;}
+
+  #skrin-mula{
+    position:fixed; inset:0; z-index:100;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(27,138,143,.35), transparent 60%),
+      linear-gradient(165deg,#0F2A26,#12332E 60%,#0a1f1c);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#F4EEDF; text-align:center; padding:28px;
+  }
+  #skrin-mula .eyebrow{font-size:10.5px; letter-spacing:3px; color:#8FD6C4; text-transform:uppercase; margin-bottom:12px; font-weight:700;}
+  #skrin-mula h1{font-size:25px; margin:0 0 12px; font-family:Georgia,serif; line-height:1.25;}
+  #skrin-mula p{font-size:14px; color:#A8CFC6; max-width:320px; margin:0 0 30px; line-height:1.6;}
+  #btn-mula{
+    background:linear-gradient(135deg,#FF9C55,#F97316); color:white; border:none;
+    padding:17px 42px; border-radius:32px; font-size:16px; font-weight:700;
+    box-shadow:0 10px 30px rgba(249,115,22,.45);
+  }
+  #btn-mula:active{transform:scale(.96);}
+  #skrin-mula .langkah{margin-top:28px; display:flex; gap:18px; font-size:10.5px; color:#5E8B82;}
+  #skrin-mula .langkah div{max-width:80px; line-height:1.5;}
+  #skrin-mula .langkah b{display:block; font-size:17px; color:#8FD6C4; margin-bottom:3px;}
+  #amaran{margin-top:22px; font-size:11px; color:#E8A33D; max-width:300px; line-height:1.5; display:none;}
+
+  #status{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    background:rgba(15,42,38,.94); backdrop-filter:blur(10px);
+    color:#F4EEDF; padding:11px 16px; font-size:12.5px; text-align:center;
+    padding-top:calc(11px + env(safe-area-inset-top)); font-weight:500;
+    transition:background .3s ease;
+  }
+  #status.ok{background:rgba(21,128,110,.94);}
+  #status.err{background:rgba(185,60,25,.95);}
+  #status .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:#8FD6C4; margin-right:7px; vertical-align:middle; animation:blink 1.6s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  #status.ok .dot{background:#B9F5C0; animation:none;}
+
+  #bar-bawah{
+    position:fixed; bottom:0; left:0; right:0; z-index:30;
+    display:none; gap:9px; justify-content:center;
+    padding:12px; padding-bottom:calc(12px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, rgba(0,0,0,.4), transparent);
+  }
+  #bar-bawah button{
+    background:rgba(244,238,223,.96); color:#12332E; border:none;
+    padding:12px 20px; border-radius:24px; font-size:13px; font-weight:700;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+  }
+  #bar-bawah button:active{transform:scale(.95);}
+
+  #audio-bar{
+    position:fixed; bottom:66px; left:50%; transform:translateX(-50%);
+    z-index:29; display:none; align-items:center; gap:10px;
+    background:rgba(15,42,38,.92); backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,.2); border-radius:20px;
+    padding:8px 14px; color:#F4EEDF; font-size:11.5px; max-width:88vw;
+  }
+  #audio-bar.show{display:flex;}
+  #audio-bar .tajuk{font-weight:700; white-space:nowrap;}
+  #audio-bar .track{width:80px; height:3px; background:rgba(255,255,255,.2); border-radius:3px; overflow:hidden;}
+  #audio-bar .track i{display:block; height:100%; width:0%; background:#8FD6C4;}
+  #audio-bar button{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:14px; padding:5px 10px; font-size:11px;}
+</style>
+</head>
+<body>
+
+<div id="skrin-mula">
+  <div class="eyebrow">Langkawi UNESCO Global Geopark</div>
+  <h1>Banner Hidup<br>Augmented Reality</h1>
+  <p>Halakan kamera ke banner untuk hidupkan pemandangan, kemudian sentuh bulatan bernombor — nota muncul terus di atas banner.</p>
+  <button id="btn-mula">Mula Pengalaman AR</button>
+  <div class="langkah">
+    <div><b>1</b>Benarkan kamera</div>
+    <div><b>2</b>Hala ke banner</div>
+    <div><b>3</b>Sentuh nombor</div>
+  </div>
+  <div id="amaran"></div>
+</div>
+
+<div id="status" style="display:none;"><span class="dot"></span><span id="status-teks">Memulakan…</span></div>
+
+<div id="audio-bar">
+  <span class="tajuk" id="ab-tajuk">—</span>
+  <span class="track"><i id="ab-progres"></i></span>
+  <button id="ab-ulang">Ulang</button>
+  <button id="ab-tutup">Tutup</button>
+</div>
+
+<div id="bar-bawah">
+  <button id="btn-semua">Tunjuk Semua Nota</button>
+  <button id="btn-reload">Mula Semula</button>
+</div>
+
+<a-scene id="ar-scene"
+         mindar-image="imageTargetSrc: ./assets/targets.mind; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001; missTolerance: 10; warmupTolerance: 1;"
+         color-space="sRGB" renderer="colorManagement: true, alpha: true, antialias: true"
+         vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+         embedded style="display:none;">
+
+  <a-assets timeout="20000">
+    <video id="video-geopark" src="./assets/geopark-video.mp4" preload="auto"
+           loop playsinline webkit-playsinline crossorigin="anonymous"></video>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"
+            cursor="rayOrigin: mouse; fuse: false"
+            raycaster="objects: .clickable; far: 30"></a-camera>
+
+  <a-entity mindar-image-target="targetIndex: 0" id="target-entity">
+    <a-video src="#video-geopark" width="1" height="0.41653" position="0 0 0"></a-video>
+    <a-entity id="pin-holder"></a-entity>
+    <a-entity id="kad-holder"></a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+const DATA = [
+  {id:"helang",n:1,icon:"🦅",title:"HELANG",x:33.5,y:14.5,warna:"#FF8A3D",
+   fact:"Nama 'Langkawi' berasal daripada\n'Lang' (helang) dan 'Kawi' —\nsejenis batu merah di pulau ini.",
+   audio:"assets/audio/01-helang.wav"},
+  {id:"cablecar",n:2,icon:"🚡",title:"CABLE CAR",x:14.5,y:10,warna:"#FF8A3D",
+   fact:"Naik 700 meter ke puncak\nGunung Mat Cincang, formasi\ngeologi tertua di Asia Tenggara.",
+   audio:"assets/audio/02-cablecar.wav"},
+  {id:"telagatujuh",n:3,icon:"💧",title:"TELAGA TUJUH",x:7.5,y:30,warna:"#FF8A3D",
+   fact:"Tujuh kolam semula jadi dari\nair terjun setinggi 91 meter.\nLegenda: didiami bidadari.",
+   audio:"assets/audio/03-telagatujuh.wav"},
+  {id:"kilim",n:4,icon:"🏞️",title:"KILIM GEOPARK",x:93.5,y:42,warna:"#FF8A3D",
+   fact:"Seluas 100 km persegi —\nsatu-satunya di Malaysia yang\ngabungkan karst & hutan bakau.",
+   audio:"assets/audio/04-kilim.wav"},
+  {id:"pulau99",n:5,icon:"🏝️",title:"99 PULAU",x:50,y:42,warna:"#FF8A3D",
+   fact:"Langkawi ialah kepulauan\n99 buah pulau semasa\nair pasang.",
+   audio:"assets/audio/05-pulau99.wav"},
+  {id:"tanjungrhu",n:6,icon:"🏖️",title:"TANJUNG RHU",x:10,y:90.5,warna:"#FF8A3D",
+   fact:"Pantai berpasir putih di utara\nLangkawi, titik permulaan\nlawatan bot ke Kilim.",
+   audio:"assets/audio/06-tanjungrhu.wav"},
+  {id:"botmangrove",n:7,icon:"🚤",title:"BOT MANGROVE",x:56.5,y:68.5,warna:"#FF8A3D",
+   fact:"Jelajah seluruh Langkawi naik\nmangrove boat — sungai, gua\ndan kawasan helang!",
+   audio:"assets/audio/07-botmangrove.wav"},
+  {id:"machinchang",n:8,icon:"🏔️",title:"MACHINCHANG",x:19,y:16,warna:"#1B8A8F",
+   fact:"Banjaran gunung tertua di\nMalaysia — lebih 500 juta\ntahun.",
+   audio:"assets/audio/08-machinchang.wav"},
+  {id:"hutanbakau",n:9,icon:"🌿",title:"HUTAN BAKAU KILIM",x:90,y:72,warna:"#1B8A8F",
+   fact:"Habitat helang, sikas batu\nkapur dan pelbagai hidupan\nlaut unik.",
+   audio:"assets/audio/09-hutanbakau.wav"},
+  {id:"visigeopark",n:10,icon:"🛡️",title:"VISI GEOPARK",x:14,y:68,warna:"#1B8A8F",
+   fact:"UNESCO Geopark —\npemuliharaan alam dan\npelancongan mampan.",
+   audio:"assets/audio/10-visigeopark.wav"},
+];
+
+const H = 0.41653;
+const toUnit = d => ({ x:(d.x/100)-0.5, y:(0.5-d.y/100)*H });
+const KAD_W = 0.30, KAD_H = 0.115;
+
+const pinHolder = document.getElementById('pin-holder');
+const kadHolder = document.getElementById('kad-holder');
+
+DATA.forEach((d, idx) => {
+  const p = toUnit(d);
+
+  // ===== FIX ISU 3: class "clickable" mesti pada GEOMETRI (ada mesh),
+  // bukan pada <a-entity> kosong. Tambah cakera hitbox telus yang lebih besar. =====
+  const pin = document.createElement('a-entity');
+  pin.setAttribute('data-idx', idx);
+  pin.setAttribute('position', `${p.x.toFixed(5)} ${p.y.toFixed(5)} 0.03`);
+  pin.innerHTML = `
+    <a-circle class="clickable" data-idx="${idx}" radius="0.045"
+              material="opacity: 0.001; transparent: true; shader: flat"
+              position="0 0 0.004"></a-circle>
+    <a-circle radius="0.034" color="#FFFFFF" opacity="0.45" position="0 0 -0.003"
+      animation="property: scale; from: 1 1 1; to: 1.35 1.35 1; dir: alternate; dur: 1400; loop: true; easing: easeInOutSine"
+      material="shader: flat"></a-circle>
+    <a-circle radius="0.023" color="#FFFFFF" opacity="0.95" position="0 0 -0.001"
+              scale="1.2 1.2 1" material="shader: flat"></a-circle>
+    <a-circle radius="0.023" color="${d.warna}" material="shader: flat"></a-circle>
+    <a-text value="${d.n}" align="center" color="#FFFFFF" width="1.15"
+      position="0 0 0.002" scale="${d.n===10?0.44:0.52} ${d.n===10?0.44:0.52} 1"></a-text>
+  `;
+  pinHolder.appendChild(pin);
+
+  const atas = p.y < (H/2 - KAD_H - 0.03);
+  let kadY = atas ? p.y + KAD_H/2 + 0.045 : p.y - KAD_H/2 - 0.045;
+  kadY = Math.max(-H/2 + KAD_H/2, Math.min(H/2 - KAD_H/2, kadY));
+  const kadX = Math.max(-0.5 + KAD_W/2, Math.min(0.5 - KAD_W/2, p.x));
+
+  const kad = document.createElement('a-entity');
+  kad.setAttribute('id','kad-'+idx);
+  kad.setAttribute('position', `${kadX.toFixed(5)} ${kadY.toFixed(5)} 0.06`);
+  kad.setAttribute('visible','false');
+  kad.setAttribute('scale','0.01 0.01 0.01');
+  kad.innerHTML = `
+    <a-plane width="${KAD_W}" height="${KAD_H}" color="#0F2A26" opacity="0.9" material="shader: flat"></a-plane>
+    <a-plane width="${KAD_W}" height="${KAD_H}" color="#8FD6C4" opacity="0.35"
+             position="0 0 -0.001" scale="1.02 1.06 1" material="shader: flat"></a-plane>
+    <a-plane width="${KAD_W}" height="0.022" color="${d.warna}"
+             position="0 ${(KAD_H/2-0.011).toFixed(4)} 0.001" material="shader: flat"></a-plane>
+    <a-text value="${d.n}. ${d.title}" align="center" color="#FFFFFF" width="0.62"
+            position="0 ${(KAD_H/2-0.011).toFixed(4)} 0.003"></a-text>
+    <a-text value="${d.fact}" align="center" color="#DFF3EC" width="0.55"
+            position="0 -0.008 0.003" line-height="52"></a-text>
+  `;
+  kadHolder.appendChild(kad);
+});
+
+const videoEl = document.getElementById('video-geopark');
+const audioBar = document.getElementById('audio-bar');
+let currentAudio=null, progresTimer=null, idxSemasa=-1, targetAktif=false;
+
+function hentikanAudio(){
+  if(currentAudio){ currentAudio.pause(); currentAudio.currentTime=0; currentAudio=null; }
+  if(progresTimer){ clearInterval(progresTimer); progresTimer=null; }
+  document.getElementById('ab-progres').style.width='0%';
+  try{ videoEl.volume=1.0; }catch(e){}
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
+function mainAudio(d){
+  hentikanAudio();
+  try{ videoEl.volume=0.12; }catch(e){}
+  document.getElementById('ab-tajuk').textContent = d.n+'. '+d.title;
+  audioBar.classList.add('show');
+  const a = new Audio(d.audio);
+  currentAudio = a;
+  const bar = document.getElementById('ab-progres');
+  a.play().catch(()=>{
+    try{ videoEl.volume=1.0; }catch(e){}
+    if('speechSynthesis' in window){
+      const u=new SpeechSynthesisUtterance(d.title+'. '+d.fact.replace(/\n/g,' '));
+      u.lang='ms-MY'; u.rate=.95;
+      const vs=speechSynthesis.getVoices();
+      const v=vs.find(v=>v.lang?.toLowerCase().startsWith('ms'))||vs.find(v=>v.lang?.toLowerCase().startsWith('id'));
+      if(v) u.voice=v;
+      speechSynthesis.speak(u);
+    }
+  });
+  a.addEventListener('ended',()=>{ try{ videoEl.volume=1.0; }catch(e){} });
+  progresTimer=setInterval(()=>{ if(a.duration) bar.style.width=((a.currentTime/a.duration)*100).toFixed(1)+'%'; },120);
+}
+
+function sembunyiSemuaKad(){
+  DATA.forEach((_,i)=>{
+    const k=document.getElementById('kad-'+i);
+    k.setAttribute('visible','false');
+    k.setAttribute('scale','0.01 0.01 0.01');
+  });
+}
+function bukaKad(idx){
+  if(idx===idxSemasa){ tutupKad(); return; }
+  sembunyiSemuaKad();
+  idxSemasa=idx;
+  const k=document.getElementById('kad-'+idx);
+  k.setAttribute('visible','true');
+  k.removeAttribute('animation__pop');
+  k.setAttribute('animation__pop','property: scale; from: 0.4 0.4 0.4; to: 1 1 1; dur: 260; easing: easeOutBack');
+  mainAudio(DATA[idx]);
+}
+function tutupKad(){
+  sembunyiSemuaKad(); idxSemasa=-1;
+  hentikanAudio(); audioBar.classList.remove('show');
+}
+
+// FIX ISU 3: dengar klik pada cakera hitbox (ada mesh -> raycaster boleh kesan)
+document.querySelectorAll('.clickable').forEach(el=>{
+  el.addEventListener('click', ()=> bukaKad(parseInt(el.dataset.idx)));
+});
+
+document.getElementById('ab-tutup').onclick=tutupKad;
+document.getElementById('ab-ulang').onclick=()=>{ if(idxSemasa>=0) mainAudio(DATA[idxSemasa]); };
+
+let modSemua=false;
+document.getElementById('btn-semua').onclick=function(){
+  modSemua=!modSemua;
+  hentikanAudio(); audioBar.classList.remove('show'); idxSemasa=-1;
+  DATA.forEach((_,i)=>{
+    const k=document.getElementById('kad-'+i);
+    k.setAttribute('visible', modSemua?'true':'false');
+    k.setAttribute('scale', modSemua?'1 1 1':'0.01 0.01 0.01');
+  });
+  this.textContent = modSemua?'Sembunyi Nota':'Tunjuk Semua Nota';
+};
+document.getElementById('btn-reload').onclick=()=>location.reload();
+
+function setStatus(msg,cls){
+  document.getElementById('status-teks').textContent=msg;
+  document.getElementById('status').className=cls||'';
+}
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    if(currentAudio) currentAudio.pause();
+    videoEl.pause();
+    if('speechSynthesis' in window) speechSynthesis.cancel();
+  } else if(targetAktif){ videoEl.play().catch(()=>{}); }
+});
+
+if(location.protocol==='file:'){
+  const w=document.getElementById('amaran');
+  w.style.display='block';
+  w.innerHTML='AMARAN: Anda buka fail terus (file://).<br>Kamera & AR TIDAK akan berfungsi.<br>Jalankan melalui server:<br><b>python3 -m http.server 8000</b><br>kemudian buka http://localhost:8000/ar-banner.html';
+}
+
+document.getElementById('btn-mula').addEventListener('click', async ()=>{
+  document.getElementById('skrin-mula').style.display='none';
+  document.getElementById('status').style.display='block';
+  document.getElementById('bar-bawah').style.display='flex';
+  setStatus('Memulakan kamera…');
+
+  document.getElementById('ar-scene').style.display='block';
+
+  // ===== FIX ISU 1: sediakan video TAPI JANGAN main lagi.
+  // Unlock autoplay dgn play->pause segera dalam gesture pengguna. =====
+  videoEl.muted = false;
+  videoEl.volume = 1.0;
+  try{
+    await videoEl.play();
+    videoEl.pause();
+    videoEl.currentTime = 0;
+  }catch(e){
+    // jika browser halang audio, cuba mod senyap (video tetap main nanti)
+    try{ videoEl.muted = true; await videoEl.play(); videoEl.pause(); videoEl.currentTime = 0; }catch(e2){}
+  }
+  videoEl.addEventListener('error',()=> setStatus('RALAT: video gagal dimuat','err'));
+
+  // ===== FIX ISU 2: pastikan video kamera MindAR kelihatan =====
+  const paksaKameraNampak = () => {
+    document.querySelectorAll('video').forEach(v=>{
+      if(v.id === 'video-geopark') return;
+      v.style.setProperty('display','block','important');
+      v.style.setProperty('visibility','visible','important');
+      v.style.setProperty('opacity','1','important');
+      v.style.setProperty('z-index','0','important');
+      v.style.setProperty('position','fixed','important');
+      v.style.setProperty('top','50%','important');
+      v.style.setProperty('left','50%','important');
+      v.style.setProperty('transform','translate(-50%,-50%)','important');
+      v.style.setProperty('min-width','100%','important');
+      v.style.setProperty('min-height','100%','important');
+      v.style.setProperty('object-fit','cover','important');
+    });
+    const cv = document.querySelector('canvas.a-canvas');
+    if(cv){ cv.style.setProperty('background','transparent','important'); }
+  };
+  // jalankan berulang sebentar sebab MindAR sisip video secara async
+  let cuba = 0;
+  const timerKamera = setInterval(()=>{
+    paksaKameraNampak();
+    if(++cuba > 40) clearInterval(timerKamera);   // ~8 saat
+  }, 200);
+
+  if(location.protocol==='file:'){
+    setStatus('RALAT: mesti dijalankan melalui server','err');
+  } else {
+    try{
+      const r = await fetch('./assets/targets.mind');
+      if(r.ok) setStatus('Halakan kamera ke banner Langkawi Geopark');
+      else setStatus('RALAT: targets.mind tidak dijumpai dalam assets/','err');
+    }catch(e){
+      setStatus('RALAT: targets.mind tidak dijumpai dalam assets/','err');
+    }
+  }
+
+  const target=document.getElementById('target-entity');
+
+  // ===== FIX ISU 1: video+bunyi HANYA bila marker dikesan =====
+  target.addEventListener('targetFound',()=>{
+    targetAktif = true;
+    setStatus('Banner dikesan — sentuh bulatan bernombor','ok');
+    videoEl.muted = false;
+    videoEl.currentTime = 0;
+    videoEl.play().catch(()=>{});
+    paksaKameraNampak();
+  });
+  target.addEventListener('targetLost',()=>{
+    targetAktif = false;
+    setStatus('Halakan kamera ke banner Langkawi Geopark');
+    videoEl.pause();          // berhenti bunyi bila banner hilang
+    tutupKad();
+  });
+
+  document.getElementById('ar-scene').addEventListener('arError',()=> setStatus('RALAT AR: gagal mulakan kamera','err'));
+  document.getElementById('ar-scene').addEventListener('arReady',()=>{
+    paksaKameraNampak();
+    setStatus('Halakan kamera ke banner Langkawi Geopark');
+  });
+});
+</script>
+</body>
+</html>
