@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Langkawi Geopark — Banner Hidup AR</title>
+
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+<style>
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    font-family:-apple-system,'Segoe UI',Arial,sans-serif;
+    overflow:hidden; position:fixed; inset:0;
+  }
+
+  /* PENTING: paksa kamera AR isi PENUH skrin di semua peranti (iOS/Android) */
+  #ar-scene{
+    position:fixed !important; inset:0 !important;
+    width:100vw !important; height:100vh !important; height:100dvh !important;
+    z-index:1;
+  }
+  #ar-scene canvas.a-canvas{
+    position:fixed !important; inset:0 !important;
+    width:100vw !important; height:100vh !important; height:100dvh !important;
+    object-fit:cover;
+  }
+  a-scene video#video-geopark{ display:none; }
+
+  #skrin-mula{
+    position:fixed; inset:0; z-index:100;
+    background:linear-gradient(160deg,#0F2A26,#12332E);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#F4EEDF; text-align:center; padding:24px;
+  }
+  #skrin-mula h1{font-size:22px; margin-bottom:8px; font-family:Georgia,serif;}
+  #skrin-mula p{font-size:14px; color:#8FD6C4; max-width:320px; margin-bottom:28px; line-height:1.5;}
+  #btn-mula{
+    background:#FF8A3D; color:white; border:none; padding:16px 36px;
+    border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;
+    box-shadow:0 8px 24px rgba(255,138,61,.4);
+  }
+
+  #panduan{
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    background:rgba(18,51,46,.88); color:#F4EEDF; padding:10px 18px;
+    border-radius:24px; font-size:13px; z-index:10; text-align:center;
+    transition:opacity .4s; max-width:90vw;
+  }
+  #btn-balik{
+    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    background:#F4EEDF; color:#12332E; padding:10px 22px; border-radius:24px;
+    font-size:13px; font-weight:bold; text-decoration:none; z-index:10; border:none;
+  }
+
+  #overlay-popup{
+    position:fixed; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; padding:20px;
+    background:rgba(0,0,0,.35);
+  }
+  #overlay-popup.show{display:flex;}
+  .popup-card{
+    width:100%; max-width:300px; padding:22px;
+    background:rgba(20,45,42,0.55); backdrop-filter:blur(18px) saturate(150%);
+    -webkit-backdrop-filter:blur(18px) saturate(150%);
+    border:1px solid rgba(255,255,255,.35); border-radius:22px;
+    box-shadow:0 12px 40px rgba(0,0,0,.4);
+    text-align:center; color:#F4EEDF;
+    transform:scale(.9); transition:transform .25s ease;
+  }
+  #overlay-popup.show .popup-card{transform:scale(1);}
+  .popup-card .icon{font-size:44px; line-height:1;}
+  .popup-card h3{margin:10px 0 6px; font-size:18px; letter-spacing:.5px;}
+  .popup-card p{margin:0; font-size:14px; line-height:1.5; color:#DFF3EC;}
+  .popup-card .row{display:flex; gap:10px; margin-top:16px;}
+  .popup-card button{
+    flex:1; padding:10px; border-radius:16px; border:1px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.15); color:white; font-size:13px; cursor:pointer;
+  }
+  .popup-card .tutup{background:rgba(255,138,61,.85); border:none; font-weight:bold;}
+  .audio-badge{
+    display:inline-flex; align-items:center; gap:6px; margin-top:6px; font-size:10px; padding:3px 10px;
+    border-radius:10px; background:rgba(255,255,255,.12); color:#8FD6C4;
+  }
+  .eq{display:inline-flex; gap:2px; align-items:flex-end; height:11px;}
+  .eq span{width:2.5px; background:#8FD6C4; border-radius:1px; animation:eqAnim .9s ease-in-out infinite;}
+  .eq span:nth-child(2){animation-delay:.2s;}
+  .eq span:nth-child(3){animation-delay:.4s;}
+  @keyframes eqAnim{0%,100%{height:3px;}50%{height:11px;}}
+
+  #scan-hint{
+    position:fixed; top:70px; left:50%; transform:translateX(-50%);
+    z-index:9; display:none; pointer-events:none;
+  }
+  #scan-hint.show{display:block;}
+  .scan-frame{width:180px; height:75px; position:relative;}
+  .scan-corner{position:absolute; width:22px; height:22px; border:3px solid #FF8A3D;}
+  .scan-corner.tl{top:0; left:0; border-right:none; border-bottom:none; border-radius:6px 0 0 0;}
+  .scan-corner.tr{top:0; right:0; border-left:none; border-bottom:none; border-radius:0 6px 0 0;}
+  .scan-corner.bl{bottom:0; left:0; border-right:none; border-top:none; border-radius:0 0 0 6px;}
+  .scan-corner.br{bottom:0; right:0; border-left:none; border-top:none; border-radius:0 0 6px 0;}
+  .scan-line{
+    position:absolute; left:4%; right:4%; height:2px; top:0;
+    background:linear-gradient(90deg,transparent,#FF8A3D,transparent);
+    animation:scanMove 1.8s ease-in-out infinite;
+  }
+  @keyframes scanMove{0%{top:6%;}50%{top:88%;}100%{top:6%;}}
+
+  #loading-overlay{
+    position:fixed; inset:0; z-index:110; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:#0F2A26; color:#F4EEDF;
+  }
+  .spinner{
+    width:38px; height:38px; border:3px solid rgba(255,255,255,.2);
+    border-top-color:#FF8A3D; border-radius:50%; animation:spin .8s linear infinite; margin-bottom:14px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #err-compat{
+    position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center;
+    background:#0F2A26; color:#F4EEDF; padding:24px; text-align:center;
+  }
+  #err-compat.show{display:flex; flex-direction:column;}
+  #err-compat h2{font-size:18px; margin-bottom:10px;}
+  #err-compat p{font-size:13px; color:#8FD6C4; max-width:320px; line-height:1.6;}
+</style>
+</head>
+<body>
+
+<div id="err-compat">
+  <h2>⚠️ Pelayar/peranti tidak menyokong AR</h2>
+  <p>Sila gunakan pelayar terkini — Safari (iPhone), Chrome atau Samsung Internet (Android) —
+     dan pastikan kebenaran kamera dibenarkan. Buka pautan ini terus, jangan dalam apl dalaman
+     (contoh: pelayar dalam Instagram/Facebook) kerana ia kadang menyekat kamera.</p>
+</div>
+
+<div id="skrin-mula">
+  <h1>Langkawi Geopark — Banner Hidup</h1>
+  <p>Halakan kamera ke banner untuk hidupkan animasi.
+     Sentuh nombor oren untuk baca &amp; dengar nota setiap lokasi.</p>
+  <button id="btn-mula">Mula Pengalaman AR</button>
+  <div style="margin-top:16px;font-size:11px;color:#5FA391;">Berfungsi terus dalam pelayar — tiada apl perlu dimuat turun</div>
+</div>
+
+<div id="loading-overlay" style="display:none;">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:#8FD6C4;">Menyediakan pengalaman AR…</div>
+</div>
+
+<div id="scan-hint">
+  <div class="scan-frame">
+    <div class="scan-corner tl"></div>
+    <div class="scan-corner tr"></div>
+    <div class="scan-corner bl"></div>
+    <div class="scan-corner br"></div>
+    <div class="scan-line"></div>
+  </div>
+</div>
+
+<div id="panduan" style="display:none;">Halakan kamera ke banner Langkawi Geopark</div>
+<button id="btn-balik" style="display:none;" onclick="location.reload()">Mula Semula</button>
+
+<div id="overlay-popup">
+  <div class="popup-card">
+    <div class="icon" id="pop-icon">🦅</div>
+    <h3 id="pop-title">TAJUK</h3>
+    <p id="pop-fact">Nota...</p>
+    <div class="audio-badge" id="pop-audio-status"><span>Audio</span></div>
+    <div class="row">
+      <button id="pop-dengar">Dengar Semula</button>
+      <button class="tutup" id="pop-tutup">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<a-scene id="ar-scene" mindar-image="imageTargetSrc: ./assets/targets.mind; uiLoading: no; uiScanning: no; uiError: no;"
+         color-space="sRGB" renderer="colorManagement: true"
+         vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+         embedded style="display:none;">
+
+  <a-assets>
+    <video id="video-geopark" src="./assets/geopark-video.mp4" preload="auto"
+           loop="true" playsinline webkit-playsinline crossorigin="anonymous"></video>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"
+            cursor="rayOrigin: mouse; fuse: false"
+            raycaster="objects: .clickable; far: 10"></a-camera>
+
+  <a-entity mindar-image-target="targetIndex: 0" id="target-entity">
+
+    <a-video src="#video-geopark" width="1" height="0.41667"
+             position="0 0 0" rotation="0 0 0"></a-video>
+
+    <a-entity class="pin clickable" data-id="helang" position="-0.165 0.1479 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="1" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="cablecar" position="-0.355 0.1667 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="2" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="telagatujuh" position="-0.425 0.0833 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="3" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="kilim" position="0.435 0.0333 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="4" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="pulau99" position="0.0 0.0333 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="5" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="tanjungrhu" position="-0.40 -0.16875 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="6" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="botmangrove" position="0.065 -0.07708 0.02">
+      <a-circle radius="0.020" color="#FF8A3D" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="7" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="machinchang" position="-0.31 0.14167 0.02">
+      <a-circle radius="0.020" color="#1B8A8F" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="8" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="hutanbakau" position="0.40 -0.09167 0.02">
+      <a-circle radius="0.020" color="#1B8A8F" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="9" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.45 0.45 1"></a-text>
+    </a-entity>
+
+    <a-entity class="pin clickable" data-id="visigeopark" position="-0.36 -0.075 0.02">
+      <a-circle radius="0.020" color="#1B8A8F" opacity="0.95"></a-circle>
+      <a-circle radius="0.020" color="#FFFFFF" opacity="0.5" position="0 0 -0.001" scale="1.5 1.5 1" animation__pulse="property: scale; from: 1.3 1.3 1; to: 1.9 1.9 1; dir: alternate; dur: 900; loop: true; easing: easeInOutSine" animation__fade="property: material.opacity; from: 0.55; to: 0.05; dir: alternate; dur: 900; loop: true; easing: easeInOutSine"></a-circle>
+      <a-text value="10" align="center" color="#FFFFFF" width="1" position="0 0 0.001" scale="0.38 0.38 1"></a-text>
+    </a-entity>
+
+  </a-entity>
+</a-scene>
+
+<script>
+const DATA = {
+  helang:      {icon:"🦅", title:"HELANG", fact:"Asal nama pulau Langkawi — gabungan 'Lang' (helang) dan 'Kawi' (warna merah kecoklatan).", audioFile:"assets/audio/01-helang.wav"},
+  cablecar:    {icon:"🚡", title:"CABLE CAR", fact:"Membawa pengunjung naik 700 meter ke puncak Gunung Mat Cincang, formasi geologi tertua di Asia Tenggara.", audioFile:"assets/audio/02-cablecar.wav"},
+  telagatujuh: {icon:"💧", title:"TELAGA TUJUH", fact:"Tujuh kolam semula jadi terbentuk daripada air terjun setinggi 91 meter. Menurut legenda, didiami bidadari.", audioFile:"assets/audio/03-telagatujuh.wav"},
+  kilim:       {icon:"🏞️", title:"KILIM GEOPARK", fact:"Seluas 100 kilometer persegi, satu-satunya tempat di Malaysia yang gabungkan ekosistem karst tepi laut dan hutan bakau.", audioFile:"assets/audio/04-kilim.wav"},
+  pulau99:     {icon:"🏝️", title:"99 PULAU", fact:"Langkawi ialah kepulauan 99 buah pulau semasa air pasang, dengan Pulau Langkawi sebagai yang terbesar.", audioFile:"assets/audio/05-pulau99.wav"},
+  tanjungrhu:  {icon:"🏖️", title:"TANJUNG RHU", fact:"Pantai berpasir putih di hujung utara Langkawi, titik permulaan popular untuk lawatan bot ke Kilim.", audioFile:"assets/audio/06-tanjungrhu.wav"},
+  botmangrove: {icon:"🚤", title:"BOT MANGROVE", fact:"Anda boleh menjelajahi seluruh Pulau Langkawi dengan menaiki mangrove boat — merentasi sungai, gua dan kawasan helang!", audioFile:"assets/audio/07-botmangrove.wav"},
+  machinchang: {icon:"🏔️", title:"MACHINCHANG", fact:"Banjaran gunung tertua di Malaysia — lebih 500 juta tahun, tapak hutan hujan purba.", audioFile:"assets/audio/08-machinchang.wav"},
+  hutanbakau:  {icon:"🌿", title:"HUTAN BAKAU KILIM", fact:"Habitat penting bagi helang, sikas batu kapur dan pelbagai hidupan laut yang unik.", audioFile:"assets/audio/09-hutanbakau.wav"},
+  visigeopark: {icon:"🛡️", title:"VISI GEOPARK", fact:"UNESCO Geopark — gabungan pemuliharaan alam semula jadi dan pelancongan mampan untuk generasi akan datang.", audioFile:"assets/audio/10-visigeopark.wav"},
+};
+
+let currentAudio = null;
+const audioCache = {}; // elak muat turun semula bila "Dengar Semula" ditekan
+const badgeEl = document.getElementById('pop-audio-status');
+
+function setBadge(mode){
+  // mode: 'loading' | 'playing' | 'tts' | 'idle'
+  if(mode === 'playing'){
+    badgeEl.innerHTML = '<span class="eq"><span></span><span></span><span></span></span><span>Audio rakaman</span>';
+  } else if(mode === 'tts'){
+    badgeEl.innerHTML = '<span class="eq"><span></span><span></span><span></span></span><span>Suara automatik</span>';
+  } else if(mode === 'loading'){
+    badgeEl.innerHTML = '<span>Memuatkan audio…</span>';
+  } else {
+    badgeEl.innerHTML = '<span>Audio</span>';
+  }
+}
+
+function speakFallback(text){
+  if(!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ms-MY'; u.rate = 0.95;
+  const voices = window.speechSynthesis.getVoices();
+  const v = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('ms'))
+         || voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('id'));
+  if(v) u.voice = v;
+  u.onstart = () => setBadge('tts');
+  u.onend = () => setBadge('idle');
+  window.speechSynthesis.speak(u);
+}
+
+function getAudio(id, d){
+  if(audioCache[id]) return audioCache[id];
+  const audio = new Audio(d.audioFile);
+  audio.preload = 'auto';
+  audioCache[id] = audio;
+  return audio;
+}
+
+function playAudio(id, d){
+  window.speechSynthesis.cancel();
+  if(currentAudio){ currentAudio.pause(); }
+
+  const audio = getAudio(id, d);
+  currentAudio = audio;
+  audio.currentTime = 0;
+  setBadge('loading');
+
+  audio.onplaying = () => setBadge('playing');
+  audio.onended = () => setBadge('idle');
+
+  const p = audio.play();
+  if(p && p.catch){
+    p.catch(() => { speakFallback(d.title + '. ' + d.fact); });
+  }
+  audio.onerror = () => { speakFallback(d.title + '. ' + d.fact); };
+}
+
+let currentId = null;
+
+function openPopup(id){
+  const d = DATA[id];
+  if(!d) return;
+  currentId = id;
+  document.getElementById('pop-icon').textContent = d.icon;
+  document.getElementById('pop-title').textContent = d.title;
+  document.getElementById('pop-fact').textContent = d.fact;
+  document.getElementById('overlay-popup').classList.add('show');
+  playAudio(id, d);
+}
+function closePopup(){
+  document.getElementById('overlay-popup').classList.remove('show');
+  window.speechSynthesis.cancel();
+  if(currentAudio){ currentAudio.pause(); }
+}
+document.getElementById('pop-tutup').onclick = closePopup;
+document.getElementById('pop-dengar').onclick = () => {
+  if(currentId && DATA[currentId]) playAudio(currentId, DATA[currentId]);
+};
+
+document.querySelectorAll('.pin').forEach(pin => {
+  pin.addEventListener('click', () => openPopup(pin.dataset.id));
+});
+
+function deviceSupported(){
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  let hasWebGL = false;
+  try{
+    const c = document.createElement('canvas');
+    hasWebGL = !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
+  }catch(e){}
+  return hasCamera && hasWebGL;
+}
+
+document.getElementById('btn-mula').addEventListener('click', () => {
+  if(!deviceSupported()){
+    document.getElementById('err-compat').classList.add('show');
+    return;
+  }
+
+  document.getElementById('skrin-mula').style.display = 'none';
+  document.getElementById('loading-overlay').style.display = 'flex';
+
+  const scene = document.getElementById('ar-scene');
+
+  const revealScene = () => {
+    document.getElementById('loading-overlay').style.display = 'none';
+    scene.style.display = 'block';
+    document.getElementById('panduan').style.display = 'block';
+    document.getElementById('btn-balik').style.display = 'block';
+    document.getElementById('scan-hint').classList.add('show');
+  };
+
+  // MindAR sedia bila kamera + model siap dimuatkan (arReady), fallback timeout jaga-jaga
+  let revealed = false;
+  const doReveal = () => { if(!revealed){ revealed = true; revealScene(); } };
+  scene.addEventListener('arReady', doReveal);
+  scene.addEventListener('arError', () => {
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('err-compat').classList.add('show');
+  });
+  setTimeout(doReveal, 2500);
+
+  const video = document.getElementById('video-geopark');
+  video.muted = false;
+  video.play().catch(()=>{ video.muted = true; video.play(); });
+
+  const target = document.getElementById('target-entity');
+  target.addEventListener('targetFound', () => {
+    document.getElementById('scan-hint').classList.remove('show');
+    document.getElementById('panduan').textContent = 'Banner hidup! Sentuh nombor oren untuk info';
+    video.play();
+  });
+  target.addEventListener('targetLost', () => {
+    document.getElementById('scan-hint').classList.add('show');
+    document.getElementById('panduan').textContent = 'Halakan kamera ke banner Langkawi Geopark';
+  });
+
+  // Pra-muat audio secara senyap di latar belakang (lepas gesture pengguna, elak lengah bila tekan pin)
+  setTimeout(() => {
+    Object.keys(DATA).forEach(id => getAudio(id, DATA[id]));
+  }, 1800);
+});
+
+if('speechSynthesis' in window){ window.speechSynthesis.onvoiceschanged = () => {}; }
+</script>
+</body>
+</html>
